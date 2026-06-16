@@ -77,8 +77,14 @@ jobs:
           set -euo pipefail
           FILES="cred-helper-darwin-arm64 cred-helper-linux-amd64 cred-helper-linux-amd64-layer.tar cred-helper-sha256.txt"
           NOTES='Rolling cred-helper build — do NOT pin (bytes change each build). Credential-free; tokens are env vars per consuming CI job.'
-          gh release create credhelper-latest $FILES --title 'cred-helper (rolling)' --notes "$NOTES" --prerelease \
-          || gh release upload credhelper-latest $FILES --clobber
+          # View-then-act (not `create || upload`): avoids the "tag exists
+          # locally but not pushed" gh failure when the release already exists,
+          # and --target pins the tag to this commit on first creation.
+          if gh release view credhelper-latest >/dev/null 2>&1; then
+            gh release upload credhelper-latest $FILES --clobber
+          else
+            gh release create credhelper-latest $FILES --title 'cred-helper (rolling)' --notes "$NOTES" --prerelease --target "$GITHUB_SHA"
+          fi
 
       - name: Publish immutable per-commit release (credhelper-<sha>)
         env:
