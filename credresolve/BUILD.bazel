@@ -14,7 +14,11 @@ package(default_visibility = ["//visibility:public"])
 cargo_build_script(
     name = "build_script",
     srcs = ["build.rs"],
-    data = ["//proto/fastverk/v1:connection.proto"],
+    data = [
+        "//proto/fastverk/v1:connection.proto",
+        "//proto/fastverk/v1:daemon.proto",
+        "//proto/fastverk/v1:gitlab.proto",
+    ],
     edition = "2021",
     build_script_env = {
         "PROTOC": "$(execpath @protobuf//:protoc)",

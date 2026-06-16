@@ -5,4 +5,8 @@ the cred-helper and (later) fvkit. Exported for credresolve's build.rs
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["connection.proto"])
+exports_files([
+    "connection.proto",
+    "daemon.proto",
+    "gitlab.proto",
+])

@@ -16,6 +16,8 @@ pub mod proto {
 
 pub mod connections;
 pub mod credstore;
+pub mod daemon;
+pub mod gitlab;
 pub mod paths;
 pub mod secretstore;
 pub mod uri;

@@ -44,7 +44,15 @@ fn respond(body: &str) -> String {
     // no registry file still authenticates via the env backend. Any miss —
     // unknown host, no stored secret, or an error — degrades to anonymous.
     match credresolve::connections::resolve(&uri) {
-        Ok(Some(c)) => headers(&c.header, &c.value),
+        Ok(Some(c)) => {
+            // Surface any non-secret diagnostic (e.g. a GitLab package-registry
+            // fetch about to use an OAuth-only token, which the registry 401s)
+            // on stderr — never on stdout, which carries the protocol reply.
+            if let Some(w) = &c.warning {
+                eprintln!("{w}");
+            }
+            headers(&c.header, &c.value)
+        }
         _ => EMPTY.to_string(),
     }
 }
