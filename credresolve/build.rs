@@ -6,7 +6,11 @@
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     prost_build::compile_protos(
-        &["../proto/fastverk/v1/connection.proto"],
+        &[
+            "../proto/fastverk/v1/connection.proto",
+            "../proto/fastverk/v1/daemon.proto",
+            "../proto/fastverk/v1/gitlab.proto",
+        ],
         &["../proto"],
     )?;
     Ok(())
