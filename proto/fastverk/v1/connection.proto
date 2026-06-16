@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+// fastverk connection registry — the host->auth table the credential
+// helper consults and the GUI manages.
+//
+// A "connection" maps one or more hosts to an HTTP header carrying a
+// secret. The secret itself NEVER lives in this message (or the
+// persisted registry): only a reference to the OS keychain item that
+// holds the current access token. `fvd` owns the token lifecycle
+// (OAuth refresh); the credential helper only reads the live token.
+//
+// Persisted (prost-encoded) at <config_dir>/connections.pb and read by
+// both `fvd` and the standalone `cred_helper` (keychain-fallback path
+// when the daemon is down).
+
+package fastverk.v1;
+
+// How a connection authenticates.
+enum AuthKind {
+  // Default / unset — treated as no usable auth.
+  AUTH_KIND_UNSPECIFIED = 0;
+  // OAuth2 — refreshable. Either RFC 8628 device-code or PKCE loopback,
+  // depending on which OAuthConfig endpoints are set.
+  AUTH_KIND_OAUTH = 1;
+  // Static API key / personal access token. No refresh.
+  AUTH_KIND_API_KEY = 2;
+}
+
+// A backend-neutral reference to where a connection's secret physically
+// lives. The registry stores only this reference, never the secret bytes.
+// Adding a new store is a new oneof variant + a SecretStore impl — a
+// contained change, never config-injected code (this reads secrets).
+message SecretRef {
+  // Exactly one store locates the secret. The cheap, dependency-free
+  // backends (keychain, env, file) resolve inline in the cred-helper hot
+  // path; network/SDK backends (Vault, AWS) are added here later as
+  // variants 4..6 and resolve through fvd.
+  oneof store {
+    // OS keychain / Secret Service / Credential Manager item.
+    KeychainRef keychain = 1;
+    // Environment variable(s) — for CI/automation with no keychain.
+    EnvRef env = 2;
+    // A file on disk holding the secret (mode 0600).
+    FileRef file = 3;
+  }
+}
+
+// An OS keychain item (macOS login Keychain; later Secret Service /
+// Windows Credential Manager) addressed by (service, account).
+message KeychainRef {
+  // Keychain item "service" — NOT the secret.
+  string service = 1;
+  // Keychain item "account" — NOT the secret.
+  string account = 2;
+}
+
+// Environment variable source. The first non-empty of `var` then each of
+// `aliases` wins, so the canonical name is preferred but legacy/ecosystem
+// names still resolve.
+message EnvRef {
+  // Canonical variable name, e.g. "FASTVERK_TOKEN_GITHUB".
+  string name = 1;
+  // Accepted alternates, e.g. "GITHUB_TOKEN", "GH_TOKEN".
+  repeated string aliases = 2;
+}
+
+// A file holding the secret. The trimmed file contents are the secret
+// unless `field` selects a key from a `KEY=VALUE` or flat-JSON map.
+message FileRef {
+  // Absolute path to the secret file (created mode 0600 on write).
+  string path = 1;
+  // Optional key to extract from a KEY=VALUE / JSON map; empty = whole file.
+  string field = 2;
+}
+
+// OAuth2 client + endpoint configuration for a provider.
+message OAuthConfig {
+  // OAuth2 client identifier.
+  string client_id = 1;
+  // OAuth2 client secret. Optional: public clients (PKCE) omit it.
+  string client_secret = 2;
+  // Authorization endpoint (used by the PKCE loopback flow).
+  string auth_url = 3;
+  // Token endpoint (code/device-code -> token, and refresh).
+  string token_url = 4;
+  // RFC 8628 device-authorization endpoint (preferred for a menu-bar
+  // app — no loopback server needed). Empty to force PKCE.
+  string device_auth_url = 5;
+  // Scopes to request.
+  repeated string scopes = 6;
+  // Loopback redirect URI for the PKCE flow.
+  string redirect_uri = 7;
+}
+
+// One managed connection: which hosts it covers, what header to inject,
+// and where its secret lives in the keychain.
+message Connection {
+  // Stable slug, e.g. "github", "gitlab", "buildbuddy".
+  string id = 1;
+  // Human label, e.g. "GitHub", "GitLab (gitlab.example.com)".
+  string display_name = 2;
+  // Provider preset: "github" | "gitlab" | "buildbuddy" | "generic".
+  string provider = 3;
+  // Hosts this connection authenticates. Exact ("github.com") or a
+  // "*.suffix" wildcard ("*.github.com").
+  repeated string host_patterns = 4;
+  // HTTP header to emit, e.g. "Authorization".
+  string header = 5;
+  // Optional value prefix prepended to the secret, e.g. "Bearer ".
+  string value_prefix = 6;
+  // How this connection authenticates.
+  AuthKind auth_kind = 7;
+  // OAuth client/endpoint config; set when auth_kind == AUTH_KIND_OAUTH.
+  OAuthConfig oauth = 8;
+  // DEPRECATED (migration-only): the keychain item the secret used to be
+  // pinned to before secret backends were pluggable. New connections leave
+  // these empty and use `secret_refs`; on load, a connection with empty
+  // `secret_refs` but a set `keychain_service` is migrated to a single
+  // KeychainRef. Remove once no on-disk registry carries them.
+  string keychain_service = 9;
+  // DEPRECATED (migration-only): see keychain_service.
+  string keychain_account = 10;
+  // Non-secret token expiry, for status display. RFC 3339; empty when
+  // unknown or the token does not expire.
+  string token_expires_at = 11;
+  // When this connection was established. RFC 3339.
+  string connected_at = 12;
+  // Where this connection's secret lives, tried in order until one
+  // resolves (first non-empty wins). E.g. [keychain, env] — the keychain
+  // locally, the canonical env var in CI. Never holds the secret itself.
+  repeated SecretRef secret_refs = 13;
+}
+
+// The persisted host->connection registry.
+message ConnectionRegistry {
+  // All managed connections.
+  repeated Connection connections = 1;
+}

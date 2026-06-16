@@ -1,0 +1,14 @@
+"""Target platform for the linux/amd64 cross-compile. Pass via
+`bazel build ... --platforms=//tools/oci:linux_amd64` to make the rust_binary
+build as x86-64 Linux (the CI image arch) via zig cc, even on a mac.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+platform(
+    name = "linux_amd64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

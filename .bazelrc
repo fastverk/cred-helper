@@ -1,0 +1,32 @@
+# fastverk/cred-helper — build config. All deps are public (BCR + crates.io),
+# so no credential helper / registry auth is needed to build this repo.
+
+common --registry=https://bcr.bazel.build/
+
+# crate_universe isolated usage (matches the fastverk meta repo).
+common --experimental_isolated_extension_usages
+
+# ─── hermetic_cc_toolchain (zig) sandbox mounts + linux link flags ───
+# Zig writes its cache under /tmp (linux) / /var/tmp (macos); let the sandbox
+# reach it. On linux, disable section GC so lld keeps protobuf/upb's linkarr
+# section (the __start_/__stop_ encapsulation symbols), matching the fastverk
+# meta repo's hard-won cross-compile config.
+common --enable_platform_specific_config
+build:macos --sandbox_add_mount_pair=/var/tmp
+build:linux --sandbox_add_mount_pair=/tmp
+build:linux --host_linkopt=-Wl,--no-gc-sections
+build:linux --linkopt=-Wl,--no-gc-sections
+
+# ─── Remote cache + BES (BuildBuddy) ────────────────────────────────
+# Endpoints only — opt-in via `--config=remote`. Auth is NOT in this file:
+# CI passes `--remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY`, and a
+# local dev keeps that header in ~/.bazelrc. Cache errors fall back to local.
+build:remote --remote_cache=grpcs://remote.buildbuddy.io
+build:remote --bes_backend=grpcs://remote.buildbuddy.io
+build:remote --bes_results_url=https://app.buildbuddy.io/invocation/
+build:remote --remote_timeout=600
+build:remote --remote_cache_compression
+build:remote --experimental_remote_cache_eviction_retries=5
+
+test --test_output=errors
+test --test_summary=terse

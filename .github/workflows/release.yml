@@ -1,0 +1,97 @@
+name: release
+
+# Build + publish the fastverk cred-helper as GitHub Release artifacts on THIS
+# (public) repo, so consumers — CI on gitlab/github runners + local mac —
+# fetch them with NO auth. Native publish via the repo's own GITHUB_TOKEN (no
+# cross-repo token, no App, no PAT).
+#
+# Two releases per merge:
+#   - credhelper-latest  — rolling "what's newest" pointer (clobbered).
+#   - credhelper-<sha>   — IMMUTABLE per-commit release; pin (url, sha256).
+# THREE credential-free artifacts each + a sha256 manifest. Tokens are injected
+# as env vars per consuming CI job; the helper resolves them at runtime.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'credresolve/**'
+      - 'cred-helper/**'
+      - 'proto/**'
+      - 'MODULE.bazel'
+      - 'Cargo.lock'
+      - '.bazelrc'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    # macos-14 builds darwin/arm64 natively AND linux/amd64 via zig, one job.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: bazel-contrib/setup-bazel@0.13.0
+        with:
+          bazelisk-cache: true
+          disk-cache: true
+
+      - name: Build artifacts (darwin/arm64 + linux/amd64 + layer)
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        run: |
+          set -euo pipefail
+          # BuildBuddy cache + BES when the key is present; auth via the
+          # header (no credential helper in this repo). Cache errors fall
+          # back to local, so a missing/invalid key never fails the build.
+          if [ -n "${BUILDBUDDY_API_KEY:-}" ]; then
+            REMOTE="--config=remote --remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}"
+          else
+            REMOTE=""
+          fi
+          L="--platforms=//tools/oci:linux_amd64"
+
+          bazel build $REMOTE //cred-helper:cred_helper
+          cp "$(bazel cquery $REMOTE --output=files //cred-helper:cred_helper)" cred-helper-darwin-arm64
+
+          bazel build $REMOTE $L //cred-helper:cred_helper
+          cp "$(bazel cquery $REMOTE $L --output=files //cred-helper:cred_helper)" cred-helper-linux-amd64
+
+          bazel build $REMOTE $L //cred-helper:cred_helper_layer
+          cp "$(bazel cquery $REMOTE $L --output=files //cred-helper:cred_helper_layer)" cred-helper-linux-amd64-layer.tar
+
+          chmod 0755 cred-helper-darwin-arm64 cred-helper-linux-amd64
+          shasum -a 256 cred-helper-* > cred-helper-sha256.txt
+          cat cred-helper-sha256.txt
+
+      - name: Publish rolling prerelease (credhelper-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          FILES="cred-helper-darwin-arm64 cred-helper-linux-amd64 cred-helper-linux-amd64-layer.tar cred-helper-sha256.txt"
+          NOTES='Rolling cred-helper build — do NOT pin (bytes change each build). Credential-free; tokens are env vars per consuming CI job.'
+          gh release create credhelper-latest $FILES --title 'cred-helper (rolling)' --notes "$NOTES" --prerelease \
+          || gh release upload credhelper-latest $FILES --clobber
+
+      - name: Publish immutable per-commit release (credhelper-<sha>)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA:0:12}"
+          TAG="credhelper-${SHA}"
+          FILES="cred-helper-darwin-arm64 cred-helper-linux-amd64 cred-helper-linux-amd64-layer.tar cred-helper-sha256.txt"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Immutable release $TAG exists — leaving assets untouched."
+          else
+            NOTES="Immutable cred-helper pinned to commit ${SHA}. Pin (url, sha256) against this tag. Layer tar installs /usr/local/bin/cred-helper (0755, x86-64 ELF)."
+            gh release create "$TAG" $FILES --title "cred-helper ${SHA}" --notes "$NOTES" --prerelease --target "$GITHUB_SHA"
+          fi
+          echo "Immutable asset base: https://github.com/fastverk/cred-helper/releases/download/${TAG}/"

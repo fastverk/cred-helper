@@ -1,0 +1,8 @@
+"""The fastverk connection-registry contract — the single source of truth for
+the cred-helper and (later) fvkit. Exported for credresolve's build.rs
+(prost-build) to compile.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["connection.proto"])

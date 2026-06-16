@@ -1,0 +1,35 @@
+"""The standalone universal Bazel credential helper binary + its release
+layer tar. A thin wrapper over credresolve::resolve.
+"""
+
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_binary(
+    name = "cred_helper",
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    deps = ["//credresolve"],
+)
+
+rust_test(
+    name = "cred_helper_test",
+    crate = ":cred_helper",
+    edition = "2021",
+)
+
+# Release artifact: the cred-helper at the canonical /usr/local/bin path,
+# mode 0755. Built linux/amd64 (zig cross) it's the drop-in layer a consumer
+# `http_file`s. Build with:
+#   bazel build //cred-helper:cred_helper_layer --platforms=//tools/oci:linux_amd64
+pkg_tar(
+    name = "cred_helper_layer",
+    srcs = [":cred_helper"],
+    package_dir = "/usr/local/bin",
+    # rust_binary output is `cred_helper`; consumers expect `cred-helper`.
+    remap_paths = {"/cred_helper": "/cred-helper"},
+    strip_prefix = ".",
+    mode = "0755",
+)

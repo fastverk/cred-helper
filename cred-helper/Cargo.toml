@@ -1,0 +1,15 @@
+[package]
+name = "fastverk-cred-helper"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "fastverk universal Bazel credential helper binary — resolves auth headers via credresolve (keychain/env/file)."
+
+[[bin]]
+name = "fastverk-cred-helper"
+path = "src/main.rs"
+
+[dependencies]
+credresolve = { path = "../credresolve" }

@@ -1,0 +1,4 @@
+package(default_visibility = ["//visibility:public"])
+
+# crate_universe from_cargo reads the workspace manifest.
+exports_files(["Cargo.toml"])

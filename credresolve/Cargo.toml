@@ -1,0 +1,26 @@
+[package]
+name = "credresolve"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "fastverk credential resolution: the connection-registry schema, the read/resolve path, and pluggable secret backends (keychain/env/file)."
+
+[lib]
+name = "credresolve"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+prost.workspace = true
+directories.workspace = true
+
+# OS keychain backend is macOS-only for now (Linux Secret Service / Windows
+# Credential Manager are later); elsewhere credstore stubs to None, so the
+# crate still builds (e.g. Linux CI), with env/file backends carrying CI auth.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
