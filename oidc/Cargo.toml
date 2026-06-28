@@ -1,0 +1,17 @@
+[package]
+name = "fastverk-oidc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Exchange a CI OIDC token (GitHub Actions) for a short-lived fastverk token (RFC 8693 token exchange), and export it for the cred-helper's per-host env backend."
+
+[[bin]]
+name = "fastverk-oidc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+ureq.workspace = true
+serde_json.workspace = true

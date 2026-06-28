@@ -3,7 +3,7 @@
 # (from this cargo workspace); published as prebuilt release artifacts and as
 # the `fastverk_credresolve` Bazel module.
 [workspace]
-members = ["credresolve", "cred-helper"]
+members = ["credresolve", "cred-helper", "oidc"]
 resolver = "2"
 
 [workspace.package]
@@ -18,3 +18,7 @@ prost = "0.13"
 prost-build = "0.13"
 directories = "5.0"
 keyring = { version = "3", features = ["apple-native"] }
+# fastverk-oidc only: a small blocking HTTP client (rustls) for the one-shot
+# OIDC token exchange. Kept out of credresolve + the hot-path cred-helper.
+ureq = "2"
+serde_json = "1"
